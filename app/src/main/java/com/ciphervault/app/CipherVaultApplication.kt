@@ -1,6 +1,7 @@
 package com.ciphervault.app
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -23,14 +24,30 @@ class CipherVaultApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Global Uncaught Exception Handler to catch and log startup/runtime exceptions
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e("CipherVault", "Uncaught exception in thread ${thread.name}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         database = CipherVaultDatabase.getDatabase(this)
         pinManager = PinManager(this)
 
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStop(owner: LifecycleOwner) {
-                pinManager.lockVault()
-                _lockEvents.tryEmit(Unit)
-            }
-        })
+        try {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onStop(owner: LifecycleOwner) {
+                    try {
+                        pinManager.lockVault()
+                        _lockEvents.tryEmit(Unit)
+                    } catch (e: Exception) {
+                        Log.e("CipherVault", "Error during vault lock on app stop", e)
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            Log.e("CipherVault", "Failed to register ProcessLifecycleOwner observer", e)
+        }
     }
 }

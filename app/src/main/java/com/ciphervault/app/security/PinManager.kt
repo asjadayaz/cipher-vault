@@ -14,35 +14,50 @@ class PinManager(context: Context) {
         private set
 
     fun isPinSet(): Boolean {
-        return prefs.contains(KEY_PIN_HASH) && prefs.contains(KEY_SALT)
+        return try {
+            prefs.contains(KEY_PIN_HASH) && prefs.contains(KEY_SALT)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
     }
 
     fun setupPin(pin: String): Boolean {
         if (pin.length != 4) return false
-        val salt = CryptoManager.generateSalt()
-        val saltBase64 = Base64.getEncoder().encodeToString(salt)
-        val hash = hashPin(pin, salt)
+        return try {
+            val salt = CryptoManager.generateSalt()
+            val saltBase64 = Base64.getEncoder().encodeToString(salt)
+            val hash = hashPin(pin, salt)
 
-        prefs.edit()
-            .putString(KEY_PIN_HASH, hash)
-            .putString(KEY_SALT, saltBase64)
-            .apply()
+            prefs.edit()
+                .putString(KEY_PIN_HASH, hash)
+                .putString(KEY_SALT, saltBase64)
+                .apply()
 
-        currentSecretKey = CryptoManager.deriveKey(pin.toCharArray(), salt)
-        return true
+            currentSecretKey = CryptoManager.deriveKey(pin.toCharArray(), salt)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
     }
 
     fun verifyPin(pin: String): Boolean {
         if (pin.length != 4) return false
-        val savedHash = prefs.getString(KEY_PIN_HASH, null) ?: return false
-        val saltBase64 = prefs.getString(KEY_SALT, null) ?: return false
-        val salt = Base64.getDecoder().decode(saltBase64)
+        return try {
+            val savedHash = prefs.getString(KEY_PIN_HASH, null) ?: return false
+            val saltBase64 = prefs.getString(KEY_SALT, null) ?: return false
+            val salt = Base64.getDecoder().decode(saltBase64)
 
-        val computedHash = hashPin(pin, salt)
-        return if (savedHash == computedHash) {
-            currentSecretKey = CryptoManager.deriveKey(pin.toCharArray(), salt)
-            true
-        } else {
+            val computedHash = hashPin(pin, salt)
+            if (savedHash == computedHash) {
+                currentSecretKey = CryptoManager.deriveKey(pin.toCharArray(), salt)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
             false
         }
     }

@@ -40,7 +40,9 @@ abstract class CipherVaultDatabase : RoomDatabase() {
                     context.applicationContext,
                     CipherVaultDatabase::class.java,
                     "cipher_vault_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

@@ -1,5 +1,6 @@
 package com.ciphervault.app.security
 
+import java.security.NoSuchAlgorithmException
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
@@ -30,7 +31,11 @@ object CryptoManager {
 
     fun deriveKey(pin: CharArray, salt: ByteArray): SecretKey {
         val spec = PBEKeySpec(pin, salt, PBKDF2_ITERATIONS, KEY_LENGTH_BIT)
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val factory = try {
+            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        } catch (e: NoSuchAlgorithmException) {
+            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1")
+        }
         val keyBytes = factory.generateSecret(spec).encoded
         return SecretKeySpec(keyBytes, ALGORITHM)
     }
@@ -39,31 +44,41 @@ object CryptoManager {
         if (plainText.isEmpty()) {
             return EncryptedData("", "")
         }
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        val iv = ByteArray(IV_LENGTH_BYTE)
-        SecureRandom().nextBytes(iv)
-        val parameterSpec = GCMParameterSpec(TAG_LENGTH_BIT, iv)
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec)
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val iv = ByteArray(IV_LENGTH_BYTE)
+            SecureRandom().nextBytes(iv)
+            val parameterSpec = GCMParameterSpec(TAG_LENGTH_BIT, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec)
 
-        val cipherTextBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
-        val ciphertextBase64 = Base64.getEncoder().encodeToString(cipherTextBytes)
-        val ivBase64 = Base64.getEncoder().encodeToString(iv)
+            val cipherTextBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+            val ciphertextBase64 = Base64.getEncoder().encodeToString(cipherTextBytes)
+            val ivBase64 = Base64.getEncoder().encodeToString(iv)
 
-        return EncryptedData(ciphertextBase64, ivBase64)
+            return EncryptedData(ciphertextBase64, ivBase64)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return EncryptedData("", "")
+        }
     }
 
     fun decrypt(encryptedData: EncryptedData, secretKey: SecretKey): String {
         if (encryptedData.ciphertextBase64.isEmpty() || encryptedData.ivBase64.isEmpty()) {
             return ""
         }
-        val cipherTextBytes = Base64.getDecoder().decode(encryptedData.ciphertextBase64)
-        val ivBytes = Base64.getDecoder().decode(encryptedData.ivBase64)
+        try {
+            val cipherTextBytes = Base64.getDecoder().decode(encryptedData.ciphertextBase64)
+            val ivBytes = Base64.getDecoder().decode(encryptedData.ivBase64)
 
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        val parameterSpec = GCMParameterSpec(TAG_LENGTH_BIT, ivBytes)
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val parameterSpec = GCMParameterSpec(TAG_LENGTH_BIT, ivBytes)
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec)
 
-        val plainTextBytes = cipher.doFinal(cipherTextBytes)
-        return String(plainTextBytes, Charsets.UTF_8)
+            val plainTextBytes = cipher.doFinal(cipherTextBytes)
+            return String(plainTextBytes, Charsets.UTF_8)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return ""
+        }
     }
 }
